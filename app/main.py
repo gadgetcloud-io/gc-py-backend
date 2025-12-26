@@ -54,7 +54,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Starting GadgetCloud Backend - Environment: {settings.ENVIRONMENT}")
-    logger.info(f"Agent Layer: {'Enabled' if settings.ANTHROPIC_API_KEY else 'Disabled'}")
+    logger.info("Authentication: JWT with Firestore user store")
 
 # Shutdown event
 @app.on_event("shutdown")
@@ -68,5 +68,5 @@ async def root():
         "service": "GadgetCloud Backend",
         "version": "1.0.0",
         "environment": settings.ENVIRONMENT,
-        "agent_enabled": bool(settings.ANTHROPIC_API_KEY)
+        "authentication": "enabled"
     }

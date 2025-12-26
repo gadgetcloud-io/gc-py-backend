@@ -1,11 +1,19 @@
 """
 Authentication Router
-JWT-based authentication endpoints
+JWT-based authentication endpoints with Firestore integration
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, HTTPException, Depends, status
+from pydantic import BaseModel, EmailStr, validator
+from typing import Dict, Any
 import logging
+
+from app.core.security import (
+    create_access_token,
+    get_current_user,
+    get_current_active_user
+)
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +30,18 @@ class SignupRequest(BaseModel):
     password: str
     name: str
 
+    @validator("password")
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
+
+    @validator("name")
+    def validate_name(cls, v):
+        if len(v.strip()) < 2:
+            raise ValueError("Name must be at least 2 characters long")
+        return v.strip()
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -29,25 +49,55 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+    @validator("new_password")
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("New password must be at least 8 characters long")
+        return v
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest):
     """
     User login endpoint
 
-    TODO: Implement actual authentication with Firestore
-    TODO: Generate JWT token
+    Authenticates user with email and password, returns JWT token
     """
-
     logger.info(f"Login attempt: {request.email}")
 
-    # Mock response for MVP
+    # Authenticate user
+    user = await UserService.authenticate_user(request.email, request.password)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create JWT token
+    token_data = {
+        "sub": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"]
+    }
+    access_token = create_access_token(token_data)
+
+    logger.info(f"Login successful: {request.email}")
+
     return TokenResponse(
-        access_token="mock_jwt_token_12345",
+        access_token=access_token,
         user={
-            "id": "user-123",
-            "email": request.email,
-            "name": "Test User",
-            "role": "customer"
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "status": user.get("status", "active")
         }
     )
 
@@ -57,49 +107,147 @@ async def signup(request: SignupRequest):
     """
     User signup endpoint
 
-    TODO: Implement user creation in Firestore
-    TODO: Hash password
-    TODO: Generate JWT token
+    Creates new user account and returns JWT token
     """
-
     logger.info(f"Signup attempt: {request.email}")
 
-    # Mock response for MVP
-    return TokenResponse(
-        access_token="mock_jwt_token_12345",
-        user={
-            "id": "user-new",
-            "email": request.email,
-            "name": request.name,
-            "role": "customer"
+    try:
+        # Create user in Firestore
+        user = await UserService.create_user(
+            email=request.email,
+            password=request.password,
+            name=request.name,
+            role="customer"  # Default role for self-registration
+        )
+
+        # Create JWT token
+        token_data = {
+            "sub": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"]
         }
-    )
+        access_token = create_access_token(token_data)
+
+        logger.info(f"Signup successful: {request.email}")
+
+        return TokenResponse(
+            access_token=access_token,
+            user={
+                "id": user["id"],
+                "email": user["email"],
+                "name": user["name"],
+                "role": user["role"],
+                "status": user.get("status", "active")
+            }
+        )
+
+    except ValueError as e:
+        # User already exists
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Signup error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user account"
+        )
 
 
 @router.post("/logout")
-async def logout():
+async def logout(current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     User logout endpoint
 
-    TODO: Invalidate token (add to blacklist)
+    In a stateless JWT system, logout is handled client-side by removing the token.
+    This endpoint can be used for audit logging.
     """
+    logger.info(f"Logout: {current_user.get('email')}")
 
     return {"message": "Logged out successfully"}
 
 
 @router.get("/me")
-async def get_current_user():
+async def get_current_user_profile(current_user: Dict[str, Any] = Depends(get_current_active_user)):
     """
     Get current user profile
 
-    TODO: Extract from JWT token
-    TODO: Fetch from Firestore
+    Returns user data from JWT token and Firestore
     """
+    # Fetch fresh data from Firestore
+    user_id = current_user.get("id")
+    user = await UserService.get_user_by_id(user_id)
 
-    # Mock response for MVP
-    return {
-        "id": "user-123",
-        "email": "user@example.com",
-        "name": "Test User",
-        "role": "customer"
-    }
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return user
+
+
+@router.put("/me")
+async def update_current_user_profile(
+    updates: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    """
+    Update current user profile
+
+    Allowed fields: name
+    """
+    user_id = current_user.get("id")
+
+    # Only allow updating certain fields
+    allowed_fields = {"name"}
+    filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+
+    if not filtered_updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid fields to update"
+        )
+
+    updated_user = await UserService.update_user(user_id, filtered_updates)
+
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    logger.info(f"Profile updated: {current_user.get('email')}")
+
+    return updated_user
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: Dict[str, Any] = Depends(get_current_active_user)
+):
+    """
+    Change user password
+
+    Requires old password for verification
+    """
+    user_id = current_user.get("id")
+
+    success = await UserService.change_password(
+        user_id,
+        request.old_password,
+        request.new_password
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password"
+        )
+
+    logger.info(f"Password changed: {current_user.get('email')}")
+
+    return {"message": "Password changed successfully"}

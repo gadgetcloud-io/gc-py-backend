@@ -31,10 +31,10 @@ async def readiness_check():
     checks = {
         "firestore": "ok",  # TODO: Add actual Firestore connectivity check
         "storage": "ok",    # TODO: Add actual Storage connectivity check
-        "ai": "ok" if settings.ANTHROPIC_API_KEY else "disabled"
+        "authentication": "ok"
     }
 
-    all_ok = all(status == "ok" or status == "disabled" for status in checks.values())
+    all_ok = all(status == "ok" for status in checks.values())
 
     return {
         "ready": all_ok,
