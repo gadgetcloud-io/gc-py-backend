@@ -50,31 +50,52 @@ def check_collection(db, collection_name, display_name=None):
 def main():
     # Get project ID and database from environment or use defaults
     default_project = os.getenv('PROJECT_ID', 'gadgetcloud-prd')
-    default_database = os.getenv('FIRESTORE_DATABASE', 'gcdb')
+    default_database = os.getenv('FIRESTORE_DATABASE', 'gc-db')
 
     parser = argparse.ArgumentParser(description='Check Firestore data')
     parser.add_argument('--project', default=default_project,
-                       help=f'GCP project (default: {default_project} from .env)')
-    parser.add_argument('--collection', help='Specific collection to check (gc-users, gc-items, etc.)')
+                       help=f'GCP project (prd, stg, or full name like gadgetcloud-prd)')
+    parser.add_argument('--collection', help='Collection to check (users, items, or full name like gc-users)')
     parser.add_argument('--database', default=default_database,
                        help=f'Firestore database name (default: {default_database} from .env)')
 
     args = parser.parse_args()
 
+    # Handle project shorthand
+    project_map = {
+        'prd': 'gadgetcloud-prd',
+        'stg': 'gadgetcloud-stg',
+        'prod': 'gadgetcloud-prd',
+        'staging': 'gadgetcloud-stg',
+        'production': 'gadgetcloud-prd'
+    }
+    project = project_map.get(args.project.lower(), args.project)
+
+    # Handle collection shorthand
+    collection_map = {
+        'users': 'gc-users',
+        'items': 'gc-items',
+        'repairs': 'gc-repairs',
+        'config': 'gc-common-config'
+    }
+    collection = args.collection
+    if collection:
+        collection = collection_map.get(collection.lower(), collection)
+
     print(f"=== Firestore Data Check ===")
-    print(f"Project: {args.project}")
+    print(f"Project: {project}")
     print(f"Database: {args.database}\n")
     
     # Initialize Firestore client
     try:
-        db = firestore.Client(project=args.project, database=args.database)
+        db = firestore.Client(project=project, database=args.database)
     except Exception as e:
         print(f"Error connecting to Firestore: {e}")
         sys.exit(1)
-    
+
     # Check specific collection or all collections
-    if args.collection:
-        check_collection(db, args.collection)
+    if collection:
+        check_collection(db, collection)
     else:
         # Check all known collections
         total = 0
