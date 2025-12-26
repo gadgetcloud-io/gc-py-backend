@@ -65,7 +65,7 @@ class Settings(BaseSettings):
                 logger.warning("Using JWT secret from environment variable or default")
 
     # Firestore
-    FIRESTORE_DATABASE: str = "(default)"
+    FIRESTORE_DATABASE: str = "gcdb"
 
     # Cloud Storage
     STORAGE_BUCKET: str = f"{PROJECT_ID}-user-documents"

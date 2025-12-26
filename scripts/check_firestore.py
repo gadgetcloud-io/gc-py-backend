@@ -3,14 +3,19 @@
 Check Firestore data - Quick database inspection tool
 
 Usage:
-  python scripts/check_firestore.py                    # Check all collections
+  python scripts/check_firestore.py                    # Check all collections (uses .env config)
   python scripts/check_firestore.py --collection users # Check specific collection
-  python scripts/check_firestore.py --project stg      # Check staging database
+  python scripts/check_firestore.py --project stg      # Override project (prd or stg)
 """
 import argparse
 from google.cloud import firestore
 import json
 import sys
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def check_collection(db, collection_name, display_name=None):
     """Check and display a Firestore collection"""
@@ -43,14 +48,19 @@ def check_collection(db, collection_name, display_name=None):
     return doc_count
 
 def main():
+    # Get project ID and database from environment or use defaults
+    default_project = os.getenv('PROJECT_ID', 'gadgetcloud-prd')
+    default_database = os.getenv('FIRESTORE_DATABASE', 'gcdb')
+
     parser = argparse.ArgumentParser(description='Check Firestore data')
-    parser.add_argument('--project', default='gadgetcloud-prd', 
-                       help='GCP project (gadgetcloud-prd or gadgetcloud-stg)')
+    parser.add_argument('--project', default=default_project,
+                       help=f'GCP project (default: {default_project} from .env)')
     parser.add_argument('--collection', help='Specific collection to check (gc-users, gc-items, etc.)')
-    parser.add_argument('--database', default='(default)', help='Firestore database name')
-    
+    parser.add_argument('--database', default=default_database,
+                       help=f'Firestore database name (default: {default_database} from .env)')
+
     args = parser.parse_args()
-    
+
     print(f"=== Firestore Data Check ===")
     print(f"Project: {args.project}")
     print(f"Database: {args.database}\n")
