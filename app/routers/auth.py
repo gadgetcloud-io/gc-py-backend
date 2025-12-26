@@ -102,7 +102,8 @@ async def login(request: LoginRequest):
     token_data = {
         "sub": user["id"],
         "email": user["email"],
-        "name": user["name"],
+        "firstName": user.get("firstName", ""),
+        "lastName": user.get("lastName", ""),
         "role": user["role"]
     }
     access_token = create_access_token(token_data)
@@ -114,7 +115,8 @@ async def login(request: LoginRequest):
         user={
             "id": user["id"],
             "email": user["email"],
-            "name": user["name"],
+            "firstName": user.get("firstName", ""),
+            "lastName": user.get("lastName", ""),
             "role": user["role"],
             "status": user.get("status", "active")
         }
@@ -131,14 +133,10 @@ async def signup(request: SignupRequest):
     logger.info(f"Signup attempt: {request.email}")
 
     try:
-        # Compute full name from firstName and lastName
-        full_name = f"{request.firstName} {request.lastName}".strip() if request.lastName else request.firstName
-
         # Create user in Firestore
         user = await UserService.create_user(
             email=request.email,
             password=request.password,
-            name=full_name,
             first_name=request.firstName,
             last_name=request.lastName,
             mobile=request.mobile,
@@ -149,7 +147,8 @@ async def signup(request: SignupRequest):
         token_data = {
             "sub": user["id"],
             "email": user["email"],
-            "name": user["name"],
+            "firstName": user["firstName"],
+            "lastName": user.get("lastName", ""),
             "role": user["role"]
         }
         access_token = create_access_token(token_data)
@@ -161,7 +160,8 @@ async def signup(request: SignupRequest):
             user={
                 "id": user["id"],
                 "email": user["email"],
-                "name": user["name"],
+                "firstName": user["firstName"],
+                "lastName": user.get("lastName", ""),
                 "role": user["role"],
                 "status": user.get("status", "active")
             }

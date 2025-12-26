@@ -28,11 +28,10 @@ class UserService:
         cls,
         email: str,
         password: str,
-        name: str,
-        role: str = "customer",
-        first_name: str = "",
+        first_name: str,
         last_name: str = "",
-        mobile: str = ""
+        mobile: str = "",
+        role: str = "customer"
     ) -> Dict[str, Any]:
         """
         Create a new user in Firestore
@@ -40,11 +39,10 @@ class UserService:
         Args:
             email: User email (must be unique)
             password: Plain text password (will be hashed)
-            name: User's display name (full name)
-            role: User role (customer, partner, support, admin)
-            first_name: User's first name (optional)
+            first_name: User's first name (required)
             last_name: User's last name (optional)
             mobile: User's mobile/phone number (optional)
+            role: User role (customer, partner, support, admin)
 
         Returns:
             Created user data (without password hash)
@@ -70,7 +68,6 @@ class UserService:
         user_data = {
             "email": email,
             "passwordHash": password_hash,
-            "name": name,
             "firstName": first_name,
             "lastName": last_name,
             "mobile": mobile_normalized,
@@ -80,7 +77,7 @@ class UserService:
             "updatedAt": firestore.SERVER_TIMESTAMP
         }
 
-        # Add to Firestore with ULID as document ID
+        # Add to Firestore with encoded sequential ID as document ID
         doc_ref = db.collection(cls.COLLECTION).document(user_id)
         doc_ref.set(user_data)
 
@@ -90,7 +87,6 @@ class UserService:
         return {
             "id": doc_ref.id,
             "email": email,
-            "name": name,
             "firstName": first_name,
             "lastName": last_name,
             "mobile": mobile_normalized,
