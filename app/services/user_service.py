@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 from google.cloud import firestore
 from datetime import datetime
 import logging
+from ulid import ULID
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
@@ -52,6 +53,9 @@ class UserService:
         # Hash password
         password_hash = hash_password(password)
 
+        # Generate ULID for user ID (short, unique, sortable)
+        user_id = str(ULID())
+
         # Create user document
         user_data = {
             "email": email,
@@ -63,11 +67,11 @@ class UserService:
             "updatedAt": firestore.SERVER_TIMESTAMP
         }
 
-        # Add to Firestore
-        doc_ref = db.collection(cls.COLLECTION).document()
+        # Add to Firestore with ULID as document ID
+        doc_ref = db.collection(cls.COLLECTION).document(user_id)
         doc_ref.set(user_data)
 
-        logger.info(f"Created user: {email} with ID: {doc_ref.id}")
+        logger.info(f"Created user: {email} with ID: {user_id}")
 
         # Return user data without password
         return {
