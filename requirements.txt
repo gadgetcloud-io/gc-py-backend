@@ -4,9 +4,7 @@ uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 python-multipart==0.0.6
-
-# Anthropic AI
-anthropic==0.18.1
+email-validator==2.1.0
 
 # GCP SDKs
 google-cloud-firestore==2.14.0
