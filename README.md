@@ -85,6 +85,39 @@ uvicorn app.main:app --reload --port 8000
 - **Swagger UI**: http://localhost:8000/api/docs
 - **ReDoc**: http://localhost:8000/api/redoc
 
+### Utility Scripts
+
+Located in `scripts/` directory:
+
+```bash
+# Check Firestore data
+python scripts/check_firestore.py                    # All collections (uses .env config)
+python scripts/check_firestore.py --collection users # Specific collection (shorthand)
+python scripts/check_firestore.py --project stg      # Override project
+
+# Supported shorthands:
+# Projects: prd, stg, prod, staging, production
+# Collections: users, items, repairs, config
+```
+
+Located in parent `../scripts/` directory (cross-repository scripts):
+
+```bash
+# Start local development (backend + frontend)
+bash ../scripts/start-local.sh
+
+# Stop local development
+bash ../scripts/stop-local.sh
+
+# Health check
+bash ../scripts/health-check.sh
+
+# Clean database
+bash ../scripts/cleanup-database.sh local              # Clean all collections
+bash ../scripts/cleanup-database.sh local gc-users     # Clean specific collection
+bash ../scripts/cleanup-database.sh stg                # Clean staging database
+```
+
 ## Environment Variables
 
 | Variable | Description | Required | Default |
