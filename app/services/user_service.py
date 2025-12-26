@@ -29,7 +29,7 @@ class UserService:
         email: str,
         password: str,
         first_name: str,
-        last_name: str = "",
+        last_name: str,
         mobile: str = "",
         role: str = "customer"
     ) -> Dict[str, Any]:
@@ -40,7 +40,7 @@ class UserService:
             email: User email (must be unique)
             password: Plain text password (will be hashed)
             first_name: User's first name (required)
-            last_name: User's last name (optional)
+            last_name: User's last name (required)
             mobile: User's mobile/phone number (optional)
             role: User role (customer, partner, support, admin)
 

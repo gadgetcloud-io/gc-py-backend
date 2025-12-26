@@ -30,7 +30,7 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str
     firstName: str
-    lastName: str = ""
+    lastName: str
     mobile: str = ""
 
     @validator("password")
@@ -47,19 +47,14 @@ class SignupRequest(BaseModel):
 
     @validator("lastName")
     def validate_last_name(cls, v):
+        if len(v.strip()) < 2:
+            raise ValueError("Last name must be at least 2 characters long")
         return v.strip()
 
     @validator("mobile")
     def validate_mobile(cls, v):
         """Validate Indian mobile number using shared validator"""
         return validate_indian_mobile(v)
-
-    @property
-    def name(self) -> str:
-        """Compute full name from firstName and lastName"""
-        if self.lastName:
-            return f"{self.firstName} {self.lastName}"
-        return self.firstName
 
 
 class TokenResponse(BaseModel):
@@ -148,7 +143,7 @@ async def signup(request: SignupRequest):
             "sub": user["id"],
             "email": user["email"],
             "firstName": user["firstName"],
-            "lastName": user.get("lastName", ""),
+            "lastName": user["lastName"],
             "role": user["role"]
         }
         access_token = create_access_token(token_data)
@@ -161,7 +156,7 @@ async def signup(request: SignupRequest):
                 "id": user["id"],
                 "email": user["email"],
                 "firstName": user["firstName"],
-                "lastName": user.get("lastName", ""),
+                "lastName": user["lastName"],
                 "role": user["role"],
                 "status": user.get("status", "active")
             }
