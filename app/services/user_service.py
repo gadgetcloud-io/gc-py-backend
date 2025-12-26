@@ -6,10 +6,11 @@ from typing import Optional, Dict, Any
 from google.cloud import firestore
 from datetime import datetime
 import logging
-from ulid import ULID
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
+from app.core.id_generator import generate_encoded_sequential_id
+from app.core.validators import validate_indian_mobile
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,10 @@ class UserService:
         email: str,
         password: str,
         name: str,
-        role: str = "customer"
+        role: str = "customer",
+        first_name: str = "",
+        last_name: str = "",
+        mobile: str = ""
     ) -> Dict[str, Any]:
         """
         Create a new user in Firestore
@@ -36,8 +40,11 @@ class UserService:
         Args:
             email: User email (must be unique)
             password: Plain text password (will be hashed)
-            name: User's display name
+            name: User's display name (full name)
             role: User role (customer, partner, support, admin)
+            first_name: User's first name (optional)
+            last_name: User's last name (optional)
+            mobile: User's mobile/phone number (optional)
 
         Returns:
             Created user data (without password hash)
@@ -53,14 +60,20 @@ class UserService:
         # Hash password
         password_hash = hash_password(password)
 
-        # Generate ULID for user ID (short, unique, sortable)
-        user_id = str(ULID())
+        # Validate and normalize mobile number
+        mobile_normalized = validate_indian_mobile(mobile)
+
+        # Generate encoded sequential user ID (4-6 chars, e.g., "1112", "112j", "11JF")
+        user_id = generate_encoded_sequential_id(db, "user_id", min_length=4)
 
         # Create user document
         user_data = {
             "email": email,
             "passwordHash": password_hash,
             "name": name,
+            "firstName": first_name,
+            "lastName": last_name,
+            "mobile": mobile_normalized,
             "role": role,
             "status": "active",
             "createdAt": firestore.SERVER_TIMESTAMP,
@@ -78,6 +91,9 @@ class UserService:
             "id": doc_ref.id,
             "email": email,
             "name": name,
+            "firstName": first_name,
+            "lastName": last_name,
+            "mobile": mobile_normalized,
             "role": role,
             "status": "active",
             "createdAt": datetime.utcnow().isoformat()

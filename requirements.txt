@@ -19,7 +19,7 @@ bcrypt==4.3.0
 python-dotenv==1.0.0
 
 # ID Generation
-python-ulid==2.7.0
+# Removed: python-ulid (replaced with custom short ID generator)
 
 # Testing
 pytest==7.4.4

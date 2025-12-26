@@ -13,6 +13,7 @@ from app.core.security import (
     get_current_user,
     get_current_active_user
 )
+from app.core.validators import validate_indian_mobile
 from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,9 @@ class LoginRequest(BaseModel):
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
-    name: str
+    firstName: str
+    lastName: str = ""
+    mobile: str = ""
 
     @validator("password")
     def validate_password(cls, v):
@@ -36,11 +39,27 @@ class SignupRequest(BaseModel):
             raise ValueError("Password must be at least 8 characters long")
         return v
 
-    @validator("name")
-    def validate_name(cls, v):
+    @validator("firstName")
+    def validate_first_name(cls, v):
         if len(v.strip()) < 2:
-            raise ValueError("Name must be at least 2 characters long")
+            raise ValueError("First name must be at least 2 characters long")
         return v.strip()
+
+    @validator("lastName")
+    def validate_last_name(cls, v):
+        return v.strip()
+
+    @validator("mobile")
+    def validate_mobile(cls, v):
+        """Validate Indian mobile number using shared validator"""
+        return validate_indian_mobile(v)
+
+    @property
+    def name(self) -> str:
+        """Compute full name from firstName and lastName"""
+        if self.lastName:
+            return f"{self.firstName} {self.lastName}"
+        return self.firstName
 
 
 class TokenResponse(BaseModel):
@@ -112,11 +131,17 @@ async def signup(request: SignupRequest):
     logger.info(f"Signup attempt: {request.email}")
 
     try:
+        # Compute full name from firstName and lastName
+        full_name = f"{request.firstName} {request.lastName}".strip() if request.lastName else request.firstName
+
         # Create user in Firestore
         user = await UserService.create_user(
             email=request.email,
             password=request.password,
-            name=request.name,
+            name=full_name,
+            first_name=request.firstName,
+            last_name=request.lastName,
+            mobile=request.mobile,
             role="customer"  # Default role for self-registration
         )
 
@@ -202,7 +227,7 @@ async def update_current_user_profile(
     user_id = current_user.get("id")
 
     # Only allow updating certain fields
-    allowed_fields = {"name"}
+    allowed_fields = {"name", "firstName", "lastName", "mobile"}
     filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
 
     if not filtered_updates:
