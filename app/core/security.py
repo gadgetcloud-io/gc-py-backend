@@ -180,3 +180,59 @@ def require_role(required_role: str):
         return current_user
 
     return role_checker
+
+
+def require_permission(resource: str, action: str):
+    """
+    Dependency factory to require specific permission
+
+    Args:
+        resource: Resource name (users, items, audit_logs, etc.)
+        action: Action name (view, create, edit, delete, etc.)
+
+    Returns:
+        Dependency function
+
+    Example:
+        @router.get("/users", dependencies=[Depends(require_permission("users", "view"))])
+        async def get_users():
+            ...
+    """
+    async def permission_checker(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+        # Import here to avoid circular dependency
+        from app.services.permission_service import PermissionService
+        from app.services.audit_service import AuditService
+
+        user_role = current_user.get("role")
+        user_id = current_user.get("id")
+        user_email = current_user.get("email")
+
+        # Check permission
+        has_permission = await PermissionService.check_permission(user_role, resource, action)
+
+        if not has_permission:
+            # Log permission denial to audit log
+            await AuditService.log_event(
+                event_type=AuditService.EVENT_PERMISSION_DENIED,
+                actor_id=user_id,
+                actor_email=user_email,
+                metadata={
+                    "resource": resource,
+                    "action": action,
+                    "role": user_role
+                }
+            )
+
+            logger.warning(
+                f"Permission denied: {user_email} ({user_role}) "
+                f"attempted to {action} {resource}"
+            )
+
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access forbidden: insufficient permissions to {action} {resource}"
+            )
+
+        return current_user
+
+    return permission_checker
