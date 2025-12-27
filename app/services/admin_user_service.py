@@ -432,10 +432,13 @@ class AdminUserService:
         admin_id: str,
         admin_email: str,
         name: Optional[str] = None,
-        mobile: Optional[str] = None
+        mobile: Optional[str] = None,
+        role: Optional[str] = None,
+        status: Optional[str] = None,
+        reason: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Update user details (name and mobile)
+        Update user details (name, mobile, role, and status)
 
         Args:
             user_id: User document ID
@@ -443,6 +446,9 @@ class AdminUserService:
             admin_email: Admin user email
             name: Full name (will be split into firstName and lastName)
             mobile: Mobile number (optional, can be None to clear)
+            role: User role (customer, partner, support, admin)
+            status: Account status (active, inactive)
+            reason: Reason for role/status change (required if role or status changes)
 
         Returns:
             Updated user data
@@ -460,6 +466,13 @@ class AdminUserService:
         user_data = doc.to_dict()
         updates = {"updatedAt": firestore.SERVER_TIMESTAMP}
         changes = {}
+
+        # Check if role or status is changing (require reason)
+        role_changing = role is not None and role != user_data.get("role")
+        status_changing = status is not None and status != user_data.get("status")
+
+        if (role_changing or status_changing) and (not reason or len(reason.strip()) < 10):
+            raise ValueError("Reason is required (minimum 10 characters) when changing role or status")
 
         # Update name if provided
         if name is not None:
@@ -496,6 +509,43 @@ class AdminUserService:
                     "new": mobile_normalized
                 }
 
+        # Update role if provided
+        if role_changing:
+            # Validate role
+            if role not in cls.VALID_ROLES:
+                raise ValueError(f"Invalid role: {role}. Must be one of: {', '.join(cls.VALID_ROLES)}")
+
+            # Prevent self-role-change
+            if user_id == admin_id:
+                raise ValueError("Cannot change your own role")
+
+            old_role = user_data.get("role")
+            updates["role"] = role
+            updates["previousRole"] = old_role
+            updates["roleChangedAt"] = firestore.SERVER_TIMESTAMP
+            updates["roleChangedBy"] = admin_id
+            changes["role"] = {"old": old_role, "new": role}
+
+        # Update status if provided
+        if status_changing:
+            # Validate status
+            if status not in cls.VALID_STATUSES:
+                raise ValueError(f"Invalid status: {status}. Must be one of: {', '.join(cls.VALID_STATUSES)}")
+
+            # Prevent deactivating another admin
+            if status == "inactive" and user_data.get("role") == "admin" and user_id != admin_id:
+                raise ValueError("Cannot deactivate another admin user")
+
+            # Prevent self-deactivation
+            if status == "inactive" and user_id == admin_id:
+                raise ValueError("Cannot deactivate your own account")
+
+            old_status = user_data.get("status", "active")
+            updates["status"] = status
+            updates["statusChangedAt"] = firestore.SERVER_TIMESTAMP
+            updates["statusChangedBy"] = admin_id
+            changes["status"] = {"old": old_status, "new": status}
+
         # If no changes, return current user
         if not changes:
             return await UserService.get_user_by_id(user_id)
@@ -503,15 +553,32 @@ class AdminUserService:
         # Update user
         doc_ref.update(updates)
 
+        # Determine event type and reason
+        event_type = AuditService.EVENT_USER_UPDATED
+        audit_reason = reason.strip() if reason else "User details updated by admin"
+
+        if role_changing and status_changing:
+            audit_reason = f"Role and status changed: {audit_reason}"
+        elif role_changing:
+            event_type = AuditService.EVENT_USER_ROLE_CHANGED
+            audit_reason = f"Role changed: {audit_reason}"
+        elif status_changing:
+            if status == "inactive":
+                event_type = AuditService.EVENT_USER_DEACTIVATED
+                audit_reason = f"User deactivated: {audit_reason}"
+            else:
+                event_type = AuditService.EVENT_USER_REACTIVATED
+                audit_reason = f"User reactivated: {audit_reason}"
+
         # Log to audit
         await AuditService.log_event(
-            event_type=AuditService.EVENT_USER_UPDATED,
+            event_type=event_type,
             actor_id=admin_id,
             actor_email=admin_email,
             target_id=user_id,
             target_email=user_data.get("email"),
             changes=changes,
-            reason="User details updated by admin"
+            reason=audit_reason
         )
 
         logger.info(

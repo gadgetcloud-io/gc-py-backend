@@ -51,6 +51,9 @@ class UpdateUserRequest(BaseModel):
     """Request model for updating user details"""
     name: Optional[str] = None
     mobile: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
+    reason: Optional[str] = None
 
     @validator("name")
     def validate_name(cls, v):
@@ -62,6 +65,22 @@ class UpdateUserRequest(BaseModel):
             name_parts = name_stripped.split(None, 1)
             if not name_parts[0]:
                 raise ValueError("First name is required")
+        return v
+
+    @validator("role")
+    def validate_role(cls, v):
+        if v is not None:
+            valid_roles = ["customer", "partner", "support", "admin"]
+            if v not in valid_roles:
+                raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+        return v
+
+    @validator("status")
+    def validate_status(cls, v):
+        if v is not None:
+            valid_statuses = ["active", "inactive"]
+            if v not in valid_statuses:
+                raise ValueError(f"Status must be one of: active, inactive")
         return v
 
 
@@ -202,13 +221,16 @@ async def update_user(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Update user details (name and mobile)
+    Update user details (name, mobile, role, and status)
 
     **Required Permission:** users.edit
 
     **Request Body:**
     - name: Full name (first and last name)
     - mobile: Mobile number (optional, can be null to clear)
+    - role: User role (customer, partner, support, admin)
+    - status: Account status (active, inactive)
+    - reason: Reason for role/status change (required if role or status changes)
 
     **Returns:**
     - Updated user data
@@ -219,7 +241,10 @@ async def update_user(
             admin_id=current_user["id"],
             admin_email=current_user["email"],
             name=request.name,
-            mobile=request.mobile
+            mobile=request.mobile,
+            role=request.role,
+            status=request.status,
+            reason=request.reason
         )
 
         return updated_user
