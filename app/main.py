@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.core.config import settings
-from app.routers import auth, items, repairs, chat, health, admin_users, admin_audit, permissions
+from app.routers import auth, items, repairs, chat, health, admin_users, admin_audit, permissions, settings as settings_router
 from app.core.logging_config import setup_logging
 
 # Setup logging
@@ -40,6 +40,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(items.router, prefix="/api/items", tags=["Items"])
 app.include_router(repairs.router, prefix="/api/repairs", tags=["Repairs"])
 app.include_router(chat.router, prefix="/api/chat", tags=["AI Chat"])
+app.include_router(settings_router.router, prefix="/api", tags=["Settings"])
 
 # Admin routers (require admin permissions)
 app.include_router(admin_users.router, prefix="/api")
